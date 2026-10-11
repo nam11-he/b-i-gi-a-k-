@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="NamBeDe: nền tảng học tập của sinh viên Trường Đại học Quy Nhơn. Ngân hàng câu hỏi, luyện tập, từ vựng và bảng xếp hạng."
+    />
+    <meta name="theme-color" content="#0066CA" />
+    <title>NamBeDe — Trường Đại học Quy Nhơn</title>
+    <script>
+      // Apply the saved dark mode before React loads, so the page does not flash white.
+      try {
+        var theme = localStorage.getItem("nambede.theme")
+        var dark = theme === "dark" || ((!theme || theme === "system") && matchMedia("(prefers-color-scheme: dark)").matches)
+        if (dark) document.documentElement.classList.add("dark")
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

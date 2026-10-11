@@ -1,0 +1,5 @@
+# Line endings that work on Windows, macOS and Linux: scripts that run inside Linux containers keep LF even in a
+# Windows checkout, Windows batch files keep CRLF
+*.sh text eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf

@@ -1,0 +1,55 @@
+server:
+  port: 8081
+  error:
+    include-message: always
+
+spring:
+  application:
+    name: auth-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/auth_db}
+    username: ${SPRING_DATASOURCE_USERNAME:nambede}
+    password: ${SPRING_DATASOURCE_PASSWORD:nambede}
+    hikari:
+      maximum-pool-size: 5
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Flyway owns the schema (db/migration); Hibernate only checks it matches the entities
+      ddl-auto: validate
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:nambede}
+    password: ${RABBITMQ_PASSWORD:nambede}
+    # The outbox publisher waits for the broker to confirm each event before marking it sent
+    publisher-confirm-type: simple
+
+# Every log line of a request shows its X-Request-ID (common.RequestIdFilter)
+logging:
+  pattern:
+    correlation: "[%X{requestId:-}] "
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  health:
+    # The broker being down only delays events (they wait in the outbox), so the service stays healthy
+    rabbit:
+      enabled: false
+
+app:
+  jwt:
+    # RS256: the key pair is made on the first start and kept in auth_db.signing_keys, nothing to set here
+    issuer: nambede-auth
+    expiration-minutes: ${JWT_EXPIRATION_MINUTES:1440}
+  admin:
+    email: ${ADMIN_EMAIL:admin@nambede.local}
+    password: ${ADMIN_PASSWORD:Admin@123}
+
+# Swagger UI keeps the token after a page reload
+springdoc:
+  swagger-ui:
+    persist-authorization: true

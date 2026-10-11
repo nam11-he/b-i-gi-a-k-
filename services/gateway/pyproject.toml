@@ -1,0 +1,29 @@
+[project]
+name = "gateway"
+version = "0.1.0"
+description = "NamBeDe API Gateway / BFF: the single entry point for clients"
+readme = "README.md"
+authors = [
+    { name = "Aiko", email = "aikocute@icloud.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.128.8",
+    "httpx>=0.28,<1",
+    "pyjwt[crypto]>=2.10",
+    "pydantic-settings>=2.6",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "respx>=0.22",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.19,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["real_sessions: check the session with (a respx fake of) auth-service instead of skipping it"]

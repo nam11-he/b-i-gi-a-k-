@@ -1,0 +1,1 @@
+"""NamBeDe API Gateway / BFF."""

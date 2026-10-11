@@ -1,0 +1,120 @@
+# NamBeDe, midterm build: the FastAPI gateway and Learning Service, with the Auth Service they sign in with,
+# and the web app for them.
+# Containers and the data volume are named nambede-midterm-*.
+name: nambede-midterm
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nambede}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nambede}
+      POSTGRES_DB: postgres
+    # Services and the database listen on 127.0.0.1 only: this computer can still call them directly (Swagger of
+    # each service), other machines on the network can only reach the gateway and the web.
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # -h 127.0.0.1 on purpose: during first-start init the temporary server only
+      # listens on the unix socket, so a socket check would pass before the DBs exist.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+      args:
+        SKIP_TESTS: ${SKIP_TESTS:-false}
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/auth_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-nambede}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-nambede}
+      # RS256: the key pair is made on the first start and kept in auth_db.signing_keys, nothing to set
+      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-1440}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@nambede.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin@123}
+      # No RabbitMQ yet: when an admin deletes a user, the user.deleted event waits in the outbox table.
+      # Try to send it once an hour instead of every 2 seconds, so the log is not filled with the same warning.
+      APP_EVENTS_PUBLISH_INTERVAL_MS: 3600000
+    ports:
+      - "127.0.0.1:8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8081/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  learning-service:
+    build: ./services/learning-service
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-nambede}:${POSTGRES_PASSWORD:-nambede}@postgres:5432/learning_db
+      # auth-service's public keys: tokens are verified here (RS256), never signed
+      JWKS_URL: http://auth-service:8081/.well-known/jwks.json
+      # learning-service asks auth-service for names and FREE / VIP
+      AUTH_SERVICE_URL: http://auth-service:8081
+    ports:
+      - "127.0.0.1:8084:8084"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8084/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  gateway:
+    build: ./services/gateway
+    environment:
+      # auth-service's public keys: tokens are verified here (RS256), never signed
+      JWKS_URL: http://auth-service:8081/.well-known/jwks.json
+      AUTH_SERVICE_URL: http://auth-service:8081
+      LEARNING_SERVICE_URL: http://learning-service:8084
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://nambede.dev.localhost,http://localhost:5173}
+    ports:
+      - "8000:8000"
+    # Only start order: the gateway must keep running when a service is down (it answers 502)
+    depends_on:
+      auth-service:
+        condition: service_started
+      learning-service:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  # Web app at http://nambede.dev.localhost (nginx serves the React build and forwards /api to the gateway)
+  web:
+    build: ./web
+    ports:
+      - "${WEB_PORT:-80}:80"
+    depends_on:
+      gateway:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+
+volumes:
+  pgdata: {}
